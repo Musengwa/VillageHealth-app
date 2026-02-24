@@ -36,7 +36,7 @@ export const createPatientVisit = async (patientData: PatientVisit) => {
     if (error) throw error;
     return { data: data?.[0], error: null };
   } catch (error) {
-    console.error('Error creating patient visit:', error);
+    console.error( error);
     return { data: null, error };
   }
 };

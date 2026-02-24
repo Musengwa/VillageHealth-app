@@ -3,14 +3,14 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { createPatientVisit } from '@/services/patientService';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 export default function PatientFormScreen() {
@@ -32,7 +32,7 @@ export default function PatientFormScreen() {
     pulse: '',
     temperature: '',
     sickness: '',
-    intensity: 'mild',
+    intensity: 'low',
   });
 
   const handlePersonalDetailChange = (field: string, value: string) => {
@@ -285,7 +285,7 @@ export default function PatientFormScreen() {
           <View style={styles.inputGroup}>
             <Text style={[styles.label, { color: colors.text }]}>Intensity</Text>
             <View style={styles.intensityContainer}>
-              {['mild', 'moderate', 'severe'].map(level => (
+              {['low', 'medium', 'high', 'critical'].map(level => (
                 <TouchableOpacity
                   key={level}
                   style={[
@@ -416,6 +416,6 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#fff',
+    color: '#20b7f3',
   },
 });
