@@ -12,7 +12,7 @@ export default function HomeScreen() {
 
   const fetchPatients = async () => {
     setLoading(true);
-    try {
+    try {  
       const { data, error } = await getPatientVisits();
       if (error) throw error;
       setPatients(data || []);
