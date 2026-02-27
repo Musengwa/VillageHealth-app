@@ -1,5 +1,4 @@
 import { useRouter } from 'expo-router';
-import React from 'react';
 import { Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 
 export default function HeroScreen() {
@@ -26,7 +25,11 @@ export default function HeroScreen() {
         </View>
 
         <Pressable style={styles.primaryButton} onPress={() => router.push('/(tabs)/Auth')}>
-          <Text style={styles.primaryButtonText}>Log In as Doctor</Text>
+          <Text style={styles.primaryButtonText}>i am a Patient</Text>
+        </Pressable>
+
+        <Pressable style={styles.primaryButton} onPress={() => router.push('/(tabs)/Auth')}>
+          <Text style={styles.primaryButtonText}>Log in as Doctor</Text>
         </Pressable>
       </View>
     </SafeAreaView>
