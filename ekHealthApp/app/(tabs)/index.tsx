@@ -1,14 +1,18 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getPatientVisits, PatientVisit } from '@/services/patientService';
+import { supabase } from '@/services/supabase';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function HomeScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const [patients, setPatients] = useState<PatientVisit[]>([]);
   const [loading, setLoading] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
 
   const fetchPatients = async () => {
     setLoading(true);
@@ -24,8 +28,27 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    fetchPatients();
-  }, []);
+    const checkAuthAndLoad = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.replace('/(tabs)/Auth');
+        setLoading(false);
+        return;
+      }
+
+      setAuthorized(true);
+      fetchPatients();
+    };
+
+    checkAuthAndLoad();
+  }, [router]);
+
+  if (!authorized && !loading) {
+    return null;
+  }
 
   const renderPatientCard = ({ item }: { item: PatientVisit }) => (
     <TouchableOpacity
@@ -84,7 +107,7 @@ export default function HomeScreen() {
               No patient visits yet
             </Text>
             <Text style={[styles.emptySubtext, { color: colors.tabIconDefault }]}>
-              Tap "New Patient" to add a patient visit
+              Tap New Patient to add a patient visit
             </Text>
           </View>
         }
