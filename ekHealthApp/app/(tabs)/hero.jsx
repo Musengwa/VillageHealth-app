@@ -24,7 +24,7 @@ export default function HeroScreen() {
           <Text style={styles.cardItem}>- Track doctor activity status</Text>
         </View>
 
-        <Pressable style={styles.primaryButton} onPress={() => router.push('/(tabs)/Auth')}>
+        <Pressable style={styles.primaryButton} onPress={() => router.push('/(tabs)/patient-form')}>
           <Text style={styles.primaryButtonText}>i am a Patient</Text>
         </Pressable>
 
