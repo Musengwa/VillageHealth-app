@@ -2,7 +2,7 @@ import { DoctorProfile, profileService } from '@/services/profileService';
 import { supabase } from '@/services/supabase';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function HelloDoctor() {
   const router = useRouter();
@@ -63,6 +63,20 @@ export default function HelloDoctor() {
       ) : (
         <Text style={{ marginTop: 12 }}>No profile data found.</Text>
       )}
+
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: '#007AFF', marginTop: 18 }]}
+        onPress={async () => {
+          try {
+            await profileService.getOrCreateLoggedInDoctorProfile();
+            router.replace('/');
+          } catch (e) {
+            Alert.alert('Session required', 'Please login first.');
+            router.replace('/doctor/login');
+          }
+        }}>
+        <Text style={styles.buttonText}>See Patients</Text>
+      </TouchableOpacity>
 
       <TouchableOpacity style={styles.button} onPress={signOut}>
         <Text style={styles.buttonText}>Logout</Text>

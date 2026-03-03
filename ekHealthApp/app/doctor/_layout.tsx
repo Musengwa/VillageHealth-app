@@ -9,6 +9,7 @@ export default function DoctorLayout() {
       }}>
       <Stack.Screen name="login" />
       <Stack.Screen name="hello-doctor" />
+      <Stack.Screen name="diagnosis" />
     </Stack>
   );
 }

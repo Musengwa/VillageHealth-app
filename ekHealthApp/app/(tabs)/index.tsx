@@ -1,6 +1,7 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getPatientVisits, PatientVisit } from '@/services/patientService';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -9,6 +10,7 @@ export default function HomeScreen() {
   const colors = Colors[colorScheme ?? 'light'];
   const [patients, setPatients] = useState<PatientVisit[]>([]);
   const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
   const fetchPatients = async () => {
     setLoading(true);
@@ -29,6 +31,7 @@ export default function HomeScreen() {
 
   const renderPatientCard = ({ item }: { item: PatientVisit }) => (
     <TouchableOpacity
+      onPress={() => router.push(`/doctor/diagnosis?patientId=${item.id}`)}
       style={[
         styles.patientCard,
         {
