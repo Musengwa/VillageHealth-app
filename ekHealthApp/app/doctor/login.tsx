@@ -3,13 +3,13 @@ import { supabase } from '@/services/supabase';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-    ActivityIndicator,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity
 } from 'react-native';
 
 export default function DoctorLogin() {
@@ -41,15 +41,11 @@ export default function DoctorLogin() {
       // Ensure a doctors profile exists for this user id.
       const existing = await profileService.getProfile(user.id).catch(() => null);
       if (!existing) {
-        // create minimal doctor profile (adjust fields as needed)
+        // create minimal doctor profile with expected fields
         const username = email.split('@')[0];
-        await profileService.upsertProfile({
-          id: user.id,
-          username,
-          firstname: '',
-          lastname: '',
-          role: 'doctor',
-        }).catch(() => null);
+        await profileService
+          .upsertProfile({ id: user.id, name: username, activity_status: 'online' })
+          .catch(() => null);
       }
 
       // navigate to doctor dashboard

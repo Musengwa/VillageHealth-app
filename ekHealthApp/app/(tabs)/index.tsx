@@ -52,6 +52,7 @@ export default function HomeScreen() {
 
   const renderPatientCard = ({ item }: { item: PatientVisit }) => (
     <TouchableOpacity
+      onPress={() => router.push(`/doctor/diagnosis?patientId=${item.id}`)}
       style={[
         styles.patientCard,
         {
