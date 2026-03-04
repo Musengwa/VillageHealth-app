@@ -35,7 +35,7 @@ export default function DiagnosisScreen() {
     markAttended();
     return () => {
       mounted = false;
-    };
+    }; 
   }, [patientId]);
 
   const submit = async () => {
