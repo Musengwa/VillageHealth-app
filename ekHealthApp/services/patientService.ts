@@ -135,6 +135,31 @@ export const getDiagnosesByPatientVisitId = async (patientVisitId: string) => {
   }
 };
 
+export const getDiagnosesByNrc = async (nrc: string) => {
+  try {
+    // find latest patient_visit for this NRC
+    console.debug('[getDiagnosesByNrc] looking up visits for nrc=', nrc);
+    const { data: visits, error: visitError } = await supabase
+      .from('patient_visits')
+      .select('id')
+      .eq('nrc', nrc)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    console.debug('[getDiagnosesByNrc] visits result=', visits, 'error=', visitError);
+    if (visitError) throw visitError;
+    const visitId = visits?.[0]?.id;
+    if (!visitId) return { data: [], error: null };
+
+    const res = await getDiagnosesByPatientVisitId(visitId);
+    console.debug('[getDiagnosesByNrc] diagnoses result for visitId=', visitId, res);
+    return res;
+  } catch (error) {
+    console.error('Error fetching diagnoses by NRC:', error);
+    return { data: null, error };
+  }
+};
+
 export const updateDiagnosis = async (id: string, diagnosisData: Partial<Diagnosis>) => {
   try {
     const { data, error } = await supabase

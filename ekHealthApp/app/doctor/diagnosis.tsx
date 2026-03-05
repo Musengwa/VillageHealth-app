@@ -2,15 +2,14 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { createDiagnosis, updatePatientVisit } from '@/services/patientService';
 import { profileService } from '@/services/profileService';
-import { useRoute } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function DiagnosisScreen() {
   const router = useRouter();
-  const route: any = useRoute();
-  const patientId = (route?.params?.patientId as string) || undefined;
+  const params = useLocalSearchParams();
+  const patientId = Array.isArray(params.patientId) ? params.patientId[0] : params.patientId;
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
 

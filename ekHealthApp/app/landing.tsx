@@ -11,7 +11,7 @@ export default function LandingPage() {
 
       <TouchableOpacity
         style={styles.button}
-        onPress={() => router.push('/(tabs)')}
+        onPress={() => router.push('/(tabs)/patientType')}
       >
         <Text style={styles.buttonText}>Patient</Text>
       </TouchableOpacity>

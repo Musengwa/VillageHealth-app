@@ -69,7 +69,7 @@ export default function HelloDoctor() {
         onPress={async () => {
           try {
             await profileService.getOrCreateLoggedInDoctorProfile();
-            router.replace('/');
+            router.replace('/doctor/patients');
           } catch (e) {
             Alert.alert('Session required', 'Please login first.');
             router.replace('/doctor/login');

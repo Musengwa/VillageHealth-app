@@ -1,10 +1,13 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { createPatientVisit } from '@/services/patientService';
-import React, { useState } from 'react';
+import { setLastNrc, setLastVisitId } from '@/services/visitStore';
+import { useRouter } from 'expo-router';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,8 +19,14 @@ import {
 export default function PatientFormScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1); // Step 1: Personal Details, Step 2: Diagnosis Details
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const pendingSubmission = useRef<any | null>(null);
 
   // Personal Details State
   const [personalDetails, setPersonalDetails] = useState({
@@ -43,78 +52,72 @@ export default function PatientFormScreen() {
     setDiagnosisDetails(prev => ({ ...prev, [field]: value }));
   };
 
-  const validatePersonalDetails = () => {
-    if (!personalDetails.full_name.trim()) {
-      Alert.alert('Validation Error', 'Please enter patient name');
-      return false;
-    }
-    if (!personalDetails.phone.trim()) {
-      Alert.alert('Validation Error', 'Please enter phone number');
-      return false;
-    }
-    if (!personalDetails.nrc.trim()) {
-      Alert.alert('Validation Error', 'Please enter NRC number');
-      return false;
-    }
-    return true;
+  const validatePersonalDetails = (): string | null => {
+    if (!personalDetails.full_name.trim()) return 'Please enter patient name';
+    if (!personalDetails.phone.trim()) return 'Please enter phone number';
+    if (!personalDetails.nrc.trim()) return 'Please enter NRC number';
+    return null;
   };
 
-  const validateDiagnosisDetails = () => {
-    if (!diagnosisDetails.blood_pressure.trim()) {
-      Alert.alert('Validation Error', 'Please enter blood pressure');
-      return false;
-    }
-    if (!diagnosisDetails.pulse.trim()) {
-      Alert.alert('Validation Error', 'Please enter pulse rate');
-      return false;
-    }
-    if (!diagnosisDetails.temperature.trim()) {
-      Alert.alert('Validation Error', 'Please enter temperature');
-      return false;
-    }
-    if (!diagnosisDetails.sickness.trim()) {
-      Alert.alert('Validation Error', 'Please describe the sickness');
-      return false;
-    }
-    return true;
+  const validateDiagnosisDetails = (): string | null => {
+    if (!diagnosisDetails.blood_pressure.trim()) return 'Please enter blood pressure';
+    if (!diagnosisDetails.pulse.trim()) return 'Please enter pulse rate';
+    if (!diagnosisDetails.temperature.trim()) return 'Please enter temperature';
+    if (!diagnosisDetails.sickness.trim()) return "Please describe the patient's condition";
+    return null;
   };
 
-  const handleSubmit = async () => {
-    if (!validateDiagnosisDetails()) return;
-
+  const performSubmit = async (patientData: any) => {
     setLoading(true);
     try {
-      const patientData = {
-        ...personalDetails,
-        ...diagnosisDetails,
-        pulse: parseInt(diagnosisDetails.pulse),
-        temperature: parseFloat(diagnosisDetails.temperature),
-        status: 'waiting',
-      };
-
       const { data, error } = await createPatientVisit(patientData);
 
       if (error) {
         throw error;
       }
 
-      Alert.alert('Success', 'Patient visit recorded successfully', [
-        {
-          text: 'OK',
-          onPress: () => {
-            // Reset form
-            setStep(1);
-            setPersonalDetails({ full_name: '', phone: '', nrc: '' });
-            setDiagnosisDetails({ blood_pressure: '', pulse: '', temperature: '', sickness: '', intensity: 'mild' });
-          },
-        },
-      ]);
-    } catch (error) {
-      console.error('Error:', error);
-      Alert.alert('Error', 'Failed to record patient visit');
+      // Navigate directly to the diagnoses page for this visit
+      pendingSubmission.current = null;
+      const visitId = data?.id;
+      if (visitId) {
+        setLastVisitId(String(visitId));
+        setLastNrc(patientData.nrc ?? null);
+        router.push(`/(tabs)/see-diagnosis?visitId=${visitId}`);
+      } else {
+        setLastVisitId(null);
+        setLastNrc(patientData.nrc ?? null);
+        router.push('/(tabs)/see-diagnosis');
+      }
+    } catch (err: any) {
+      console.error('Error:', err);
+      setErrorMessage(err?.message ?? 'Failed to record patient visit');
+      setShowErrorModal(true);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = () => {
+    const validationMsg = validateDiagnosisDetails();
+    if (validationMsg) {
+      setErrorMessage(validationMsg);
+      setShowErrorModal(true);
+      return;
+    }
+
+    const patientData = {
+      ...personalDetails,
+      ...diagnosisDetails,
+      pulse: parseInt(diagnosisDetails.pulse),
+      temperature: parseFloat(diagnosisDetails.temperature),
+      status: 'waiting',
+    };
+
+    // Save pending submission so "Retry" can reuse it
+    pendingSubmission.current = patientData;
+
+    // Show confirmation modal before actually sending
+    setShowConfirmModal(true);
   };
 
   return (
@@ -123,10 +126,17 @@ export default function PatientFormScreen() {
       contentContainerStyle={styles.contentContainer}>
       {/* Header */}
       <View style={styles.headerContainer}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Patient Registration</Text>
-        <Text style={[styles.stepIndicator, { color: colors.tabIconDefault }]}>
-          Step {step} of 2
-        </Text>
+        <View>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>Patient Registration</Text>
+          <Text style={[styles.stepIndicator, { color: colors.tabIconDefault }]}>Step {step} of 2</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.seeButton, { borderColor: colors.tabIconDefault }]}
+          onPress={() => router.push('/(tabs)/see-diagnosis')}
+        >
+          <Text style={[styles.seeButtonText, { color: colors.text }]}>See Diagnosis</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Step 1: Personal Details */}
@@ -192,9 +202,13 @@ export default function PatientFormScreen() {
           <TouchableOpacity
             style={[styles.button, { backgroundColor: colors.tint }]}
             onPress={() => {
-              if (validatePersonalDetails()) {
-                setStep(2);
+              const msg = validatePersonalDetails();
+              if (msg) {
+                setErrorMessage(msg);
+                setShowErrorModal(true);
+                return;
               }
+              setStep(2);
             }}>
             <Text style={styles.buttonText}>Next</Text>
           </TouchableOpacity>
@@ -330,6 +344,89 @@ export default function PatientFormScreen() {
           </View>
         </View>
       )}
+      {/* Confirmation Modal (Are you sure?) */}
+      <Modal
+        visible={showConfirmModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowConfirmModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Confirm Submission</Text>
+            <Text style={[styles.modalText, { color: colors.text }]}>Are you sure you want to send this form? Please review your information before confirming.</Text>
+
+            <View style={styles.modalButtons}>
+              <Pressable style={[styles.modalButton, styles.modalCancel]} onPress={() => setShowConfirmModal(false)}>
+                <Text style={styles.modalCancelText}>Review</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, { backgroundColor: colors.tint }]}
+                onPress={() => {
+                  setShowConfirmModal(false);
+                  if (pendingSubmission.current) performSubmit(pendingSubmission.current);
+                }}>
+                <Text style={styles.modalButtonText}>Confirm</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal
+        visible={showSuccessModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowSuccessModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Success</Text>
+            <Text style={[styles.modalText, { color: colors.text }]}>Patient visit recorded successfully.</Text>
+
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[styles.modalButton, { backgroundColor: colors.tint }]}
+                onPress={() => {
+                  setShowSuccessModal(false);
+                  setStep(1);
+                  setPersonalDetails({ full_name: '', phone: '', nrc: '' });
+                  setDiagnosisDetails({ blood_pressure: '', pulse: '', temperature: '', sickness: '', intensity: 'mild' });
+                }}>
+                <Text style={styles.modalButtonText}>OK</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Error Modal */}
+      <Modal
+        visible={showErrorModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowErrorModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>Error</Text>
+            <Text style={[styles.modalText, { color: colors.text }]}>{errorMessage}</Text>
+
+            <View style={styles.modalButtons}>
+              <Pressable style={[styles.modalButton, styles.modalCancel]} onPress={() => setShowErrorModal(false)}>
+                <Text style={styles.modalCancelText}>Close</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalButton, { backgroundColor: colors.tint }]}
+                onPress={() => {
+                  setShowErrorModal(false);
+                  if (pendingSubmission.current) performSubmit(pendingSubmission.current);
+                }}>
+                <Text style={styles.modalButtonText}>Retry</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -345,6 +442,8 @@ const styles = StyleSheet.create({
   headerContainer: {
     marginBottom: 30,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
   },
   headerTitle: {
     fontSize: 28,
@@ -354,6 +453,16 @@ const styles = StyleSheet.create({
   stepIndicator: {
     fontSize: 14,
     fontWeight: '500',
+  },
+  seeButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  seeButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   formSection: {
     marginBottom: 20,
@@ -417,5 +526,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#20b7f3',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    width: '100%',
+    borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCancel: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.2,
+    borderColor: '#ccc',
+  },
+  modalCancelText: {
+    color: '#333',
+    fontWeight: '600',
+  },
+  modalButtonText: {
+    color: '#fff',
+    fontWeight: '700',
   },
 });
