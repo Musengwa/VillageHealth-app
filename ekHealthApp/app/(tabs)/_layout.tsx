@@ -16,14 +16,9 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
         headerShown: false,
         tabBarButton: HapticTab,
+        tabBarStyle: { display: 'none' },
       }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
+     
       <Tabs.Screen
         name="patient-form"
         options={{
@@ -31,6 +26,9 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="plus.circle.fill" color={color} />,
         }}
       />
+<<<<<<< HEAD
+
+=======
       <Tabs.Screen
         name="explore"
         options={{
@@ -52,6 +50,7 @@ export default function TabLayout() {
           tabBarStyle: { display: 'none' },
         }}
       />
+>>>>>>> 0e63f0ff1517d7351176e2c8db8fa29e61beaa90
     </Tabs>
   );
 }

@@ -1,25 +1,16 @@
-<<<<<<< HEAD
-=======
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getPatientVisits, PatientVisit } from '@/services/patientService';
-import { supabase } from '@/services/supabase';
->>>>>>> 0e63f0ff1517d7351176e2c8db8fa29e61beaa90
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-<<<<<<< HEAD
-export default function LandingPage() {
-  const router = useRouter();
-
-=======
 export default function HomeScreen() {
-  const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const [patients, setPatients] = useState<PatientVisit[]>([]);
   const [loading, setLoading] = useState(true);
-  const [authorized, setAuthorized] = useState(false);
+  const router = useRouter();
 
   const fetchPatients = async () => {
     setLoading(true);
@@ -35,27 +26,8 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
-    const checkAuthAndLoad = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      if (!session) {
-        router.replace('/(tabs)/Auth');
-        setLoading(false);
-        return;
-      }
-
-      setAuthorized(true);
-      fetchPatients();
-    };
-
-    checkAuthAndLoad();
-  }, [router]);
-
-  if (!authorized && !loading) {
-    return null;
-  }
+    fetchPatients();
+  }, []);
 
   const renderPatientCard = ({ item }: { item: PatientVisit }) => (
     <TouchableOpacity
@@ -92,27 +64,15 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
->>>>>>> 0e63f0ff1517d7351176e2c8db8fa29e61beaa90
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>EK Health</Text>
-      <Text style={styles.subtitle}>Welcome</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={styles.headerContainer}>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Patient Visits</Text>
+        <Text style={[styles.headerSubtitle, { color: colors.tabIconDefault }]}>
+          {patients.length} patient(s)
+        </Text>
+      </View>
 
-<<<<<<< HEAD
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push('/(tabs)/patientType')}
-      >
-        <Text style={styles.buttonText}>Patient</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.button, styles.doctorButton]}
-        onPress={() => router.push('/doctor/login')}
-      >
-        <Text style={styles.buttonText}>Doctor</Text>
-      </TouchableOpacity>
-=======
       <FlatList
         data={patients}
         renderItem={renderPatientCard}
@@ -127,12 +87,11 @@ export default function HomeScreen() {
               No patient visits yet
             </Text>
             <Text style={[styles.emptySubtext, { color: colors.tabIconDefault }]}>
-              Tap New Patient to add a patient visit
+              Tap "New Patient" to add a patient visit
             </Text>
           </View>
         }
       />
->>>>>>> 0e63f0ff1517d7351176e2c8db8fa29e61beaa90
     </View>
   );
 }
@@ -140,36 +99,69 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
+  },
+  headerContainer: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
+  },
+  headerTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  headerSubtitle: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  patientCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-    padding: 20,
+    marginBottom: 12,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-  },
-  subtitle: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 50,
-  },
-  button: {
-    width: '80%',
-    paddingVertical: 15,
-    marginVertical: 10,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  doctorButton: {
-    backgroundColor: '#34C759',
-  },
-  buttonText: {
-    fontSize: 18,
-    color: '#fff',
+  patientName: {
+    fontSize: 16,
     fontWeight: '600',
+    flex: 1,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  cardContent: {
+    gap: 8,
+  },
+  cardLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 6,
+  },
+  emptySubtext: {
+    fontSize: 13,
+    fontWeight: '400',
   },
 });
