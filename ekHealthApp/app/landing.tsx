@@ -9,6 +9,7 @@ export default function LandingPage() {
       <Text style={styles.title}>EK Health</Text>
       <Text style={styles.subtitle}>Welcome</Text>
 
+      <Text style={styles.subtitle}>for a quicker check up process</Text>
       <TouchableOpacity
         style={styles.button}
         onPress={() => router.push('/(tabs)/patientType')}
