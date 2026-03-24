@@ -26,31 +26,6 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="plus.circle.fill" color={color} />,
         }}
       />
-<<<<<<< HEAD
-
-=======
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="hero"
-        options={{
-          href: null,
-          tabBarStyle: { display: 'none' },
-        }}
-      />
-      <Tabs.Screen
-        name="Auth"
-        options={{
-          href: null,
-          tabBarStyle: { display: 'none' },
-        }}
-      />
->>>>>>> 0e63f0ff1517d7351176e2c8db8fa29e61beaa90
     </Tabs>
   );
 }
