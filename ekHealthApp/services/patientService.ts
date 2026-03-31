@@ -1,3 +1,4 @@
+import { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 
 export interface PatientVisit {
@@ -23,6 +24,48 @@ export interface Diagnosis {
   prescription: string;
   notes: string;
   created_at?: string;
+}
+
+type TableChangeHandler = () => void | Promise<void>;
+
+type TableSubscriptionOptions = {
+  table: 'patient_visits' | 'diagnoses';
+  filter?: string;
+  onChange: TableChangeHandler;
+};
+
+function subscribeToTableChanges({
+  table,
+  filter,
+  onChange,
+}: TableSubscriptionOptions): () => void {
+  const channelName = `realtime:${table}:${filter ?? 'all'}:${Date.now()}:${Math.random()
+    .toString(36)
+    .slice(2)}`;
+
+  const channel: RealtimeChannel = supabase
+    .channel(channelName)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table,
+        ...(filter ? { filter } : {}),
+      },
+      () => {
+        void onChange();
+      }
+    )
+    .subscribe(status => {
+      if (status === 'CHANNEL_ERROR') {
+        console.warn(`Realtime subscription failed for ${table}${filter ? ` (${filter})` : ''}.`);
+      }
+    });
+
+  return () => {
+    void supabase.removeChannel(channel);
+  };
 }
 
 // Patient Visit Services
@@ -133,6 +176,53 @@ export const getDiagnosesByPatientVisitId = async (patientVisitId: string) => {
     console.error('Error fetching diagnoses:', error);
     return { data: null, error };
   }
+};
+
+export const getDiagnoses = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('diagnoses')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error fetching all diagnoses:', error);
+    return { data: null, error };
+  }
+};
+
+export const subscribeToPatientVisitChanges = (
+  onChange: TableChangeHandler,
+  options?: { nrc?: string | null; visitId?: string | null }
+) => {
+  const filter = options?.visitId
+    ? `id=eq.${options.visitId}`
+    : options?.nrc
+      ? `nrc=eq.${options.nrc}`
+      : undefined;
+
+  return subscribeToTableChanges({
+    table: 'patient_visits',
+    filter,
+    onChange,
+  });
+};
+
+export const subscribeToDiagnosisChanges = (
+  onChange: TableChangeHandler,
+  options?: { patientVisitId?: string | null }
+) => {
+  const filter = options?.patientVisitId
+    ? `patient_visit_id=eq.${options.patientVisitId}`
+    : undefined;
+
+  return subscribeToTableChanges({
+    table: 'diagnoses',
+    filter,
+    onChange,
+  });
 };
 
 export const getDiagnosesByNrc = async (nrc: string) => {

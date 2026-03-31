@@ -28,7 +28,7 @@ export default function HeroScreen() {
           <Text style={styles.primaryButtonText}>I am a Patient</Text>
         </Pressable>
 
-        <Pressable style={styles.secondaryButton} onPress={() => router.push('/(tabs)/Auth')}>
+        <Pressable style={styles.secondaryButton} onPress={() => router.push('/doctor/login')}>
           <Text style={styles.secondaryButtonText}>Log in as Doctor</Text>
         </Pressable>
       </View>

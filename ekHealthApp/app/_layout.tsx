@@ -9,7 +9,7 @@ import { CurrentPatientProvider } from '@/context/CurrentPatientContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export const unstable_settings = {
-  anchor: 'landing',
+  initialRouteName: 'landing',
 };
 
 export default function RootLayout() {
@@ -37,7 +37,7 @@ export default function RootLayout() {
             headerShown: false,
             footerShown: false,
           }}>
-          <Stack.Screen name="/landing" />
+          <Stack.Screen name="landing" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="doctor" />
         </Stack>

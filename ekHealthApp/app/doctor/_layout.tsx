@@ -8,8 +8,9 @@ export default function DoctorLayout() {
         headerShown: false,
       }}>
       <Stack.Screen name="login" />
-      <Stack.Screen name="hello-doctor" />
       <Stack.Screen name="diagnosis" />
+      <Stack.Screen name="patients" />
+      <Stack.Screen name="hello-doctor" />
     </Stack>
   );
 }

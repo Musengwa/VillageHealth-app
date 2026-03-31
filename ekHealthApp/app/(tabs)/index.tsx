@@ -1,9 +1,9 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getPatientVisits, PatientVisit } from '@/services/patientService';
+import { getPatientVisits, PatientVisit, subscribeToPatientVisitChanges } from '@/services/patientService';
 import { supabase } from '@/services/supabase';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -23,8 +23,11 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
 
-  const fetchPatients = async () => {
-    setLoading(true);
+  const fetchPatients = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) {
+      setLoading(true);
+    }
+
     try {
       const { data, error } = await getPatientVisits();
       if (error) throw error;
@@ -34,7 +37,7 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const checkAuthAndLoad = async () => {
@@ -43,17 +46,29 @@ export default function HomeScreen() {
       } = await supabase.auth.getSession();
 
       if (!session) {
-        router.replace('/(tabs)/Auth');
+        router.replace('/landing');
         setLoading(false);
         return;
       }
 
       setAuthorized(true);
-      fetchPatients();
+      void fetchPatients();
     };
 
-    checkAuthAndLoad();
-  }, [router]);
+    void checkAuthAndLoad();
+  }, [fetchPatients, router]);
+
+  useEffect(() => {
+    if (!authorized) {
+      return;
+    }
+
+    const unsubscribePatientVisits = subscribeToPatientVisitChanges(() => fetchPatients({ silent: true }));
+
+    return () => {
+      unsubscribePatientVisits();
+    };
+  }, [authorized, fetchPatients]);
 
   if (!authorized && loading) {
     return (
@@ -115,7 +130,7 @@ export default function HomeScreen() {
         <>
           <Text style={[styles.emptyText, { color: colors.text }]}>No patient visits yet</Text>
           <Text style={[styles.emptySubtext, { color: mutedTextColor }]}>
-            Pull down to refresh after a patient is added.
+            New patient visits will show up here automatically.
           </Text>
         </>
       )}

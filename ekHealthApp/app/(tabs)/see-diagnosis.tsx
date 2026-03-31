@@ -1,17 +1,16 @@
 import { Colors } from '@/constants/theme';
 import { useCurrentPatient } from '@/context/CurrentPatientContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getDiagnosesByNrc, getDiagnosesByPatientVisitId } from '@/services/patientService';
+import {
+  Diagnosis as DiagnosisRecord,
+  getDiagnosesByNrc,
+  getDiagnosesByPatientVisitId,
+  subscribeToDiagnosisChanges,
+  subscribeToPatientVisitChanges,
+} from '@/services/patientService';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-type Diagnosis = {
-  id: string;
-  date: string;
-  notes?: string;
-  summary: string;
-};
 
 function normalizeParam(value?: string | string[] | null) {
   if (Array.isArray(value)) {
@@ -28,7 +27,7 @@ export default function SeeDiagnosis() {
   const params = useLocalSearchParams<{ nrc?: string | string[]; visitId?: string | string[] }>();
   const { isHydrated, nrc: storedNrc, setCurrentPatient, visitId: storedVisitId } = useCurrentPatient();
 
-  const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
+  const [diagnoses, setDiagnoses] = useState<DiagnosisRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
   const routeVisitId = normalizeParam(params.visitId);
@@ -53,27 +52,23 @@ export default function SeeDiagnosis() {
     });
   }, [routeNrc, routeVisitId, setCurrentPatient]);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    const fetchDiagnoses = async () => {
+  const fetchDiagnoses = useCallback(
+    async ({ silent = false }: { silent?: boolean } = {}) => {
       if (!isHydrated && !routeNrc && !routeVisitId) {
         return;
       }
 
-      setLoading(true);
+      if (!silent) {
+        setLoading(true);
+      }
 
       try {
-        let result: any = null;
+        let result: Awaited<ReturnType<typeof getDiagnosesByNrc>> | Awaited<ReturnType<typeof getDiagnosesByPatientVisitId>> | null = null;
 
         if (activePatient.nrc) {
           result = await getDiagnosesByNrc(activePatient.nrc);
         } else if (activePatient.visitId) {
           result = await getDiagnosesByPatientVisitId(activePatient.visitId);
-        }
-
-        if (!isMounted) {
-          return;
         }
 
         if (!result || result.error) {
@@ -86,18 +81,35 @@ export default function SeeDiagnosis() {
 
         setDiagnoses(result.data ?? []);
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
-    };
+    },
+    [activePatient, isHydrated, routeNrc, routeVisitId]
+  );
 
+  useEffect(() => {
     void fetchDiagnoses();
+  }, [fetchDiagnoses]);
+
+  useEffect(() => {
+    if (!activePatient.nrc && !activePatient.visitId) {
+      return;
+    }
+
+    const refreshDiagnoses = () => fetchDiagnoses({ silent: true });
+    const unsubscribeDiagnosisChanges = subscribeToDiagnosisChanges(refreshDiagnoses, {
+      patientVisitId: activePatient.visitId,
+    });
+    const unsubscribePatientVisitChanges = subscribeToPatientVisitChanges(refreshDiagnoses, {
+      nrc: activePatient.nrc,
+      visitId: activePatient.visitId,
+    });
 
     return () => {
-      isMounted = false;
+      unsubscribeDiagnosisChanges();
+      unsubscribePatientVisitChanges();
     };
-  }, [activePatient, isHydrated, routeNrc, routeVisitId]);
+  }, [activePatient.nrc, activePatient.visitId, fetchDiagnoses]);
 
   const emptyMessage =
     activePatient.visitId || activePatient.nrc ? 'Awaiting diagnosis.' : 'No diagnoses available.';
