@@ -1,19 +1,10 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getPatientVisits, PatientVisit, subscribeToPatientVisitChanges } from '@/services/patientService';
+import { getPatientVisits, PatientVisit } from '@/services/patientService';
 import { supabase } from '@/services/supabase';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { useEffect, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, FlatList } from 'react-native';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -23,12 +14,9 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
 
-  const fetchPatients = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
-    if (!silent) {
-      setLoading(true);
-    }
-
-    try {
+  const fetchPatients = async () => {
+    setLoading(true);
+    try {  
       const { data, error } = await getPatientVisits();
       if (error) throw error;
       setPatients(data || []);
@@ -37,7 +25,7 @@ export default function HomeScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     const checkAuthAndLoad = async () => {
@@ -46,46 +34,21 @@ export default function HomeScreen() {
       } = await supabase.auth.getSession();
 
       if (!session) {
-        router.replace('/landing');
+        router.replace('/(tabs)/Auth');
         setLoading(false);
         return;
       }
 
       setAuthorized(true);
-      void fetchPatients();
+      fetchPatients();
     };
 
-    void checkAuthAndLoad();
-  }, [fetchPatients, router]);
-
-  useEffect(() => {
-    if (!authorized) {
-      return;
-    }
-
-    const unsubscribePatientVisits = subscribeToPatientVisitChanges(() => fetchPatients({ silent: true }));
-
-    return () => {
-      unsubscribePatientVisits();
-    };
-  }, [authorized, fetchPatients]);
-
-  if (!authorized && loading) {
-    return (
-      <SafeAreaView style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="small" color={colors.tint} />
-      </SafeAreaView>
-    );
-  }
+    checkAuthAndLoad();
+  }, [router]);
 
   if (!authorized && !loading) {
     return null;
   }
-
-  const waitingCount = patients.filter(item => item.status === 'waiting').length;
-  const surfaceColor = colorScheme === 'dark' ? '#143323' : '#f4fbf6';
-  const borderColor = colorScheme === 'dark' ? '#28533e' : '#d6eede';
-  const mutedTextColor = colorScheme === 'dark' ? '#9eb5a6' : '#5d7464';
 
   const renderPatientCard = ({ item }: { item: PatientVisit }) => (
     <TouchableOpacity
@@ -93,8 +56,8 @@ export default function HomeScreen() {
       style={[
         styles.patientCard,
         {
-          backgroundColor: surfaceColor,
-          borderColor,
+          backgroundColor: colors.tabIconDefault,
+          borderColor: colors.tint,
         },
       ]}>
       <View style={styles.cardHeader}>
@@ -103,192 +66,86 @@ export default function HomeScreen() {
           style={[
             styles.statusBadge,
             {
-              backgroundColor: item.status === 'waiting' ? '#e8b04b' : colors.tint,
+              backgroundColor: item.status === 'waiting' ? '#FFA500' : '#4CAF50',
             },
           ]}>
           {item.status?.toUpperCase()}
         </Text>
       </View>
-
       <View style={styles.cardContent}>
-        <Text style={[styles.cardLabel, { color: mutedTextColor }]}>Phone: {item.phone}</Text>
-        <Text style={[styles.cardLabel, { color: mutedTextColor }]}>NRC: {item.nrc}</Text>
-        <Text style={[styles.cardLabel, { color: colors.text }]}>Sickness: {item.sickness}</Text>
+        <Text style={[styles.cardLabel, { color: colors.text }]}>Phone: {item.phone}</Text>
+        <Text style={[styles.cardLabel, { color: colors.text }]}>NRC: {item.nrc}</Text>
         <Text style={[styles.cardLabel, { color: colors.text }]}>
-          Temperature: {item.temperature}
-          {'\u00B0'}C
+          Sickness: {item.sickness}
+        </Text>
+        <Text style={[styles.cardLabel, { color: colors.text }]}>
+          Temperature: {item.temperature}°C
         </Text>
       </View>
     </TouchableOpacity>
   );
 
-  const renderEmptyState = () => (
-    <View style={[styles.emptyContainer, { backgroundColor: surfaceColor, borderColor }]}>
-      {loading ? (
-        <ActivityIndicator size="small" color={colors.tint} />
-      ) : (
-        <>
-          <Text style={[styles.emptyText, { color: colors.text }]}>No patient visits yet</Text>
-          <Text style={[styles.emptySubtext, { color: mutedTextColor }]}>
-            New patient visits will show up here automatically.
-          </Text>
-        </>
-      )}
-    </View>
-  );
-
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={styles.container}>
+      <Text style={styles.title}>EK Health</Text>
+      <Text style={styles.subtitle}>Welcome</Text>
+
       <FlatList
         data={patients}
         renderItem={renderPatientCard}
-        keyExtractor={(item, index) => `${item.id ?? index}`}
+        keyExtractor={item => item.id || Math.random().toString()}
         contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={loading} onRefresh={fetchPatients} tintColor={colors.tint} />
         }
-        ListHeaderComponent={
-          <View style={styles.headerSection}>
-            <View style={[styles.badge, { backgroundColor: surfaceColor, borderColor }]}>
-              <Text style={[styles.badgeText, { color: colors.tint }]}>Doctor Dashboard</Text>
-            </View>
-
-            <Text style={[styles.title, { color: colors.text }]}>Patient Visits</Text>
-            <Text style={[styles.subtitle, { color: mutedTextColor }]}>
-              Keep track of waiting patients and open a diagnosis in one tap.
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={[styles.emptyText, { color: colors.tabIconDefault }]}>
+              No patient visits yet
             </Text>
-
-            <View style={styles.statsRow}>
-              <View style={[styles.statCard, { backgroundColor: surfaceColor, borderColor }]}>
-                <Text style={[styles.statValue, { color: colors.text }]}>{patients.length}</Text>
-                <Text style={[styles.statLabel, { color: mutedTextColor }]}>Total Visits</Text>
-              </View>
-              <View style={[styles.statCard, { backgroundColor: surfaceColor, borderColor }]}>
-                <Text style={[styles.statValue, { color: colors.tint }]}>{waitingCount}</Text>
-                <Text style={[styles.statLabel, { color: mutedTextColor }]}>Waiting</Text>
-              </View>
-            </View>
+            <Text style={[styles.emptySubtext, { color: colors.tabIconDefault }]}>
+              Tap New Patient to add a patient visit
+            </Text>
           </View>
         }
-        ListEmptyComponent={renderEmptyState}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-  },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 32,
-  },
-  headerSection: {
-    marginBottom: 22,
-  },
-  badge: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginBottom: 18,
-  },
-  badgeText: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.4,
+    alignItems: 'center',
+    backgroundColor: '#f5f5f5',
+    padding: 20,
   },
   title: {
-    fontSize: 30,
-    fontWeight: '800',
+    fontSize: 32,
+    fontWeight: 'bold',
     marginBottom: 10,
+    color: '#333',
   },
   subtitle: {
-    fontSize: 15,
-    lineHeight: 22,
-    marginBottom: 18,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 10,
-  },
-  statCard: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  statLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  patientCard: {
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 14,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 14,
-  },
-  patientName: {
-    flex: 1,
     fontSize: 18,
-    fontWeight: '700',
+    color: '#666',
+    marginBottom: 50,
   },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    color: '#ffffff',
-    fontSize: 11,
-    fontWeight: '800',
-    overflow: 'hidden',
-  },
-  cardContent: {
-    gap: 8,
-  },
-  cardLabel: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  emptyContainer: {
-    borderWidth: 1,
-    borderRadius: 20,
-    padding: 24,
+  button: {
+    width: '80%',
+    paddingVertical: 15,
+    marginVertical: 10,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 160,
-    marginTop: 12,
   },
-  emptyText: {
+  doctorButton: {
+    backgroundColor: '#34C759',
+  },
+  buttonText: {
     fontSize: 18,
-    fontWeight: '700',
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
+    color: '#fff',
+    fontWeight: '600',
   },
 });
