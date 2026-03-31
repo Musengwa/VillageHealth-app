@@ -1,103 +1,146 @@
 import { Colors } from '@/constants/theme';
+import { useCurrentPatient } from '@/context/CurrentPatientContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { getDiagnosesByNrc, getDiagnosesByPatientVisitId } from '@/services/patientService';
-import { getLastNrc, getLastVisitId } from '@/services/visitStore';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type Diagnosis = {
   id: string;
   date: string;
-  summary: string;
   notes?: string;
+  summary: string;
 };
+
+function normalizeParam(value?: string | string[] | null) {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
 
 export default function SeeDiagnosis() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const params = useLocalSearchParams<{ nrc?: string | string[]; visitId?: string | string[] }>();
+  const { isHydrated, nrc: storedNrc, setCurrentPatient, visitId: storedVisitId } = useCurrentPatient();
 
-  // Placeholder data — replace with real data fetch when available
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Prefer lookup by last-entered NRC, then by visitId
-  let visitId: string | null = null;
-  let nrc: string | null = null;
+  const routeVisitId = normalizeParam(params.visitId);
+  const routeNrc = normalizeParam(params.nrc);
 
-  try {
-    // try reading query params safely
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { useSearchParams } = require('expo-router');
-    const params = useSearchParams?.() ?? {};
-    visitId = params.visitId ?? null;
-    nrc = params.nrc ?? null;
-  } catch (e) {
-    visitId = null;
-    nrc = null;
-  }
-
-  if (!nrc) nrc = getLastNrc() ?? null;
-  if (!visitId) visitId = getLastVisitId() ?? null;
+  const activePatient = useMemo(
+    () => ({
+      nrc: routeNrc ?? storedNrc,
+      visitId: routeVisitId ?? storedVisitId,
+    }),
+    [routeNrc, routeVisitId, storedNrc, storedVisitId]
+  );
 
   useEffect(() => {
-    let mounted = true;
+    if (!routeNrc && !routeVisitId) {
+      return;
+    }
+
+    void setCurrentPatient({
+      nrc: routeNrc ?? null,
+      visitId: routeVisitId ?? null,
+    });
+  }, [routeNrc, routeVisitId, setCurrentPatient]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     const fetchDiagnoses = async () => {
-      console.debug('[SeeDiagnosis] fetchDiagnoses start nrc=', nrc, 'visitId=', visitId);
+      if (!isHydrated && !routeNrc && !routeVisitId) {
+        return;
+      }
+
       setLoading(true);
+
       try {
-        let res: any = null;
-        if (nrc) {
-          res = await getDiagnosesByNrc(String(nrc));
-        } else if (visitId) {
-          res = await getDiagnosesByPatientVisitId(String(visitId));
+        let result: any = null;
+
+        if (activePatient.nrc) {
+          result = await getDiagnosesByNrc(activePatient.nrc);
+        } else if (activePatient.visitId) {
+          result = await getDiagnosesByPatientVisitId(activePatient.visitId);
         }
 
-        console.debug('[SeeDiagnosis] fetch result=', res);
-
-        if (!mounted) return;
-        if (!res) {
-          setDiagnoses([]);
-        } else if (res.error) {
-          console.error('Failed to load diagnoses', res.error);
-          setDiagnoses([]);
-        } else {
-          setDiagnoses(res.data ?? []);
+        if (!isMounted) {
+          return;
         }
+
+        if (!result || result.error) {
+          if (result?.error) {
+            console.error('Failed to load diagnoses', result.error);
+          }
+          setDiagnoses([]);
+          return;
+        }
+
+        setDiagnoses(result.data ?? []);
       } finally {
-        if (mounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
-    fetchDiagnoses();
+
+    void fetchDiagnoses();
+
     return () => {
-      mounted = false;
+      isMounted = false;
     };
-  }, [nrc, visitId]);
+  }, [activePatient, isHydrated, routeNrc, routeVisitId]);
+
+  const emptyMessage =
+    activePatient.visitId || activePatient.nrc ? 'Awaiting diagnosis.' : 'No diagnoses available.';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}> 
-      <Text style={[styles.title, { color: colors.text }]}>See Diagnosis</Text>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={styles.header}>
+        <View style={styles.headerCopy}>
+          <Text style={[styles.title, { color: colors.text }]}>See Diagnosis</Text>
+          <Text style={[styles.subtitle, { color: colors.tabIconDefault }]}>
+            {activePatient.nrc
+              ? `Showing results for NRC ${activePatient.nrc}`
+              : 'Check the latest diagnosis for the current patient'}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.homeButton, { borderColor: colors.tint }]}
+          onPress={() => router.replace('/landing')}>
+          <Text style={[styles.homeButtonText, { color: colors.tint }]}>Go Back Home</Text>
+        </TouchableOpacity>
+      </View>
 
       {loading ? (
-        <ActivityIndicator style={{ marginTop: 40 }} color={colors.tint} />
+        <ActivityIndicator style={styles.loader} color={colors.tint} />
       ) : (
         <FlatList
           data={diagnoses}
           keyExtractor={item => item.id ?? Math.random().toString()}
           contentContainerStyle={styles.list}
-          ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.text }]}>{visitId ? 'Awaiting diagnosis.' : 'No diagnoses available.'}</Text>}
+          ListEmptyComponent={<Text style={[styles.emptyText, { color: colors.text }]}>{emptyMessage}</Text>}
           renderItem={({ item }) => (
-            <View style={[styles.card, { borderColor: colors.tabIconDefault, backgroundColor: colors.tabIconDefault + '20' }]}> 
+            <View style={[styles.card, { borderColor: '#d7e9d8' }]}>
               <Text style={[styles.cardDate, { color: colors.text }]}>{(item as any).created_at ?? item.date}</Text>
               {((item as any).diagnosis ?? item.summary) ? (
-                <Text style={[styles.cardSummary, { color: colors.text }]}>{(item as any).diagnosis ?? item.summary}</Text>
+                <Text style={[styles.cardSummary, { color: colors.text }]}>
+                  {(item as any).diagnosis ?? item.summary}
+                </Text>
               ) : null}
               {item.notes ? <Text style={[styles.cardNotes, { color: colors.text }]}>{item.notes}</Text> : null}
-              {/* debug: show full object if expected fields missing */}
-              {(!(item as any).diagnosis && !item.summary) && (
+              {!(item as any).diagnosis && !item.summary ? (
                 <Text style={[styles.cardNotes, { color: colors.text, marginTop: 8 }]}>{JSON.stringify(item)}</Text>
-              )}
+              ) : null}
             </View>
           )}
         />
@@ -110,9 +153,7 @@ export default function SeeDiagnosis() {
           <Text style={styles.fabText}>Make Appointment</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.fabButton, styles.fabSecondary]}
-          onPress={() => router.back()}>
+        <TouchableOpacity style={[styles.fabButton, styles.fabSecondary]} onPress={() => router.back()}>
           <Text style={[styles.fabText, styles.fabSecondaryText]}>Back</Text>
         </TouchableOpacity>
       </View>
@@ -125,23 +166,47 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 20,
   },
+  header: {
+    gap: 12,
+    marginBottom: 12,
+  },
+  headerCopy: {
+    gap: 4,
+  },
   title: {
     fontSize: 24,
     fontWeight: '700',
-    marginBottom: 12,
+  },
+  subtitle: {
+    fontSize: 14,
+  },
+  homeButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#ffffff',
+    borderRadius: 999,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  homeButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  loader: {
+    marginTop: 40,
   },
   list: {
     paddingBottom: 120,
   },
   emptyText: {
     fontSize: 14,
-    color: '#666',
   },
   card: {
-    borderWidth: 1,
+    backgroundColor: '#ffffff',
     borderRadius: 10,
-    padding: 12,
+    borderWidth: 1,
     marginBottom: 12,
+    padding: 12,
   },
   cardDate: {
     fontSize: 12,
@@ -157,29 +222,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   fabContainer: {
+    alignItems: 'flex-end',
+    bottom: 26,
+    gap: 8,
     position: 'absolute',
     right: 16,
-    bottom: 26,
-    alignItems: 'flex-end',
-    gap: 8,
   },
   fabButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
     borderRadius: 999,
     elevation: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
   },
   fabText: {
     color: '#fff',
     fontWeight: '700',
   },
   fabSecondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#ccc',
+    backgroundColor: '#ffffff',
+    borderColor: '#b9d5bf',
+    borderWidth: 1.5,
     marginTop: 8,
   },
   fabSecondaryText: {
-    color: '#333',
+    color: '#2c5a38',
   },
 });

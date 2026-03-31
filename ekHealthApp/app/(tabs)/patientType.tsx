@@ -29,6 +29,12 @@ export default function PatientTypeScreen() {
         onPress={goToPatientForm}>
         <Text style={[styles.buttonText, { color: colors.tint }]}>Future Appointment</Text>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.button, styles.homeButton, { borderColor: colors.tint, backgroundColor: '#ffffff' }]}
+        onPress={() => router.replace('/landing')}>
+        <Text style={[styles.buttonText, { color: colors.tint }]}>Go Back Home</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -59,6 +65,10 @@ const styles = StyleSheet.create({
   secondaryButton: {
     borderWidth: 1.5,
     backgroundColor: 'transparent',
+  },
+  homeButton: {
+    borderWidth: 1.5,
+    marginTop: 8,
   },
   buttonText: {
     color: '#fff',
