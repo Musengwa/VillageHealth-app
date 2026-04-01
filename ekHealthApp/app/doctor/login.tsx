@@ -60,7 +60,7 @@ export default function DoctorLogin() {
           .upsertProfile({ id: user.id, name: username, activity_status: 'online' })
           .catch(() => null);
       } else if (existing.activity_status !== 'online') {
-        await profileService.setDoctorStatus(user.id, 'online').catch(() => null);
+        await profileService.setDoctorStatus('online').catch(() => null);
       }
 
       router.replace('/doctor/diagnosis');

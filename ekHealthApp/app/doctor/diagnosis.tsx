@@ -297,11 +297,11 @@ export default function DiagnosisScreen() {
   };
 
   const handleStatusChange = async (nextStatus: DoctorStatus) => {
-    if (!profile?.id || profile.activity_status === nextStatus) return;
+    if (profile?.activity_status === nextStatus) return;
 
     setStatusSaving(nextStatus);
     try {
-      const updatedProfile = await profileService.setDoctorStatus(profile.id, nextStatus);
+      const updatedProfile = await profileService.setDoctorStatus(nextStatus);
       setProfile(updatedProfile);
     } catch (error: any) {
       Alert.alert('Unable to update status', error?.message || 'Please try again.');
@@ -313,9 +313,7 @@ export default function DiagnosisScreen() {
   const handleSignOut = async () => {
     setSigningOut(true);
     try {
-      if (profile?.id) {
-        await profileService.setDoctorStatus(profile.id, 'offline').catch(() => null);
-      }
+      await profileService.setDoctorStatus('offline').catch(() => null);
       await supabase.auth.signOut();
       router.replace('/landing');
     } finally {
