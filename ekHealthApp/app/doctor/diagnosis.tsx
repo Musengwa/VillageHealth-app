@@ -1,6 +1,6 @@
 import {
-  Diagnosis as DiagnosisRecord,
   createDiagnosis,
+  Diagnosis as DiagnosisRecord,
   getDiagnoses,
   getPatientVisits,
   PatientVisit,
@@ -425,9 +425,7 @@ export default function DiagnosisScreen() {
                 ]}
                 onPress={handleSignOut}
                 disabled={signingOut}>
-                <Text style={styles.signOutButtonText}>
-                  {signingOut ? 'Signing Out...' : 'Log Out'}
-                </Text>
+                  <MaterialIcons name= "logout" size={16} color={palette.primary} />
               </Pressable>
             </View>
 
@@ -535,93 +533,49 @@ export default function DiagnosisScreen() {
                       <Pressable
                         key={visit.id || `${visit.full_name}-${visit.created_at}`}
                         style={({ pressed }) => [
-                          styles.patientCard,
-                          isCompactScreen && styles.patientCardCompact,
+                          styles.horizontalCard,
+                          isCompactScreen && styles.horizontalCardCompact,
                           pressed && styles.cardPressed,
                         ]}
-                        onPress={() => handleSelectPatient(visit)}>
-                        <View style={styles.patientCardMain}>
-                          <View style={[styles.patientAvatar, isCompactScreen && styles.patientAvatarCompact]}>
-                            <MaterialIcons
-                              name={complete ? 'check-circle' : 'local-hospital'}
-                              size={isCompactScreen ? 22 : 26}
-                              color={complete ? palette.success : palette.primary}
-                            />
+                        onPress={() => handleSelectPatient(visit)}
+                      >
+                        {/* Left content */}
+                        <View style={styles.cardLeft}>
+                          <View style={styles.nameRow}>
+                            <Text style={[styles.patientName, isCompactScreen && styles.patientNameCompact]}>
+                              {visit.full_name}
+                            </Text>
+                            <Text style={styles.sicknessText} numberOfLines={1}>
+                              {visit.sickness || 'General visit'}
+                            </Text>
                           </View>
 
-                          <View style={styles.patientCardBody}>
-                            <View style={styles.patientCardTopRow}>
-                              <View style={styles.patientCardHeader}>
-                                <Text style={[styles.patientName, isCompactScreen && styles.patientNameCompact]}>
-                                  {visit.full_name}
-                                </Text>
-                                <Text style={styles.patientMeta}>
-                                  {visit.sickness || 'General visit'}
-                                </Text>
-                              </View>
+                          <View style={styles.detailRow}>
+                            <MaterialIcons name="call" size={14} color={palette.primary} />
+                            <Text style={styles.detailText} numberOfLines={1}>{visit.phone}</Text>
 
-                              <View
-                                style={[
-                                  styles.badge,
-                                  complete ? styles.completedBadge : styles.pendingBadge,
-                                ]}>
-                                <Text
-                                  style={[
-                                    styles.badgeText,
-                                    complete ? styles.completedBadgeText : styles.pendingBadgeText,
-                                  ]}>
-                                  {complete ? 'Completed' : 'Pending'}
-                                </Text>
-                              </View>
-                            </View>
+                            <MaterialIcons name="device-thermostat" size={14} color={palette.primary} />
+                            <Text style={styles.detailText}>{visit.temperature ?? '-'}°C</Text>
 
-                            <View style={styles.patientFactsRow}>
-                              <View style={styles.inlineFact}>
-                                <MaterialIcons name="call" size={14} color={palette.primary} />
-                                <Text style={styles.inlineFactText} numberOfLines={1}>
-                                  {visit.phone}
-                                </Text>
-                              </View>
-                              <View style={styles.inlineFact}>
-                                <MaterialIcons name="badge" size={14} color={palette.primary} />
-                                <Text style={styles.inlineFactText} numberOfLines={1}>
-                                  {visit.nrc}
-                                </Text>
-                              </View>
-                              <View style={styles.inlineFact}>
-                                <MaterialIcons
-                                  name="device-thermostat"
-                                  size={14}
-                                  color={palette.primary}
-                                />
-                                <Text style={styles.inlineFactText}>
-                                  {visit.temperature ?? '-'} deg C
-                                </Text>
-                              </View>
-                              <View style={styles.inlineFact}>
-                                <MaterialIcons name="schedule" size={14} color={palette.primary} />
-                                <Text style={styles.inlineFactText} numberOfLines={1}>
-                                  {formatDate(visit.created_at)}
-                                </Text>
-                              </View>
-                            </View>
+                            <MaterialIcons name="schedule" size={14} color={palette.primary} />
+                            <Text style={styles.detailText}>{formatDate(visit.created_at)}</Text>
+                          </View>
 
-                            <View style={[styles.patientFooter, isCompactScreen && styles.patientFooterStack]}>
-                              <Text
-                                style={visitDiagnosis ? styles.previewText : styles.previewPlaceholder}
-                                numberOfLines={2}>
-                                {visitDiagnosis?.diagnosis ||
-                                  (complete
-                                    ? 'Open to review the saved diagnosis.'
-                                    : 'Tap to open the diagnosis form.')}
-                              </Text>
-                              <View style={[styles.openPill, isCompactScreen && styles.openPillCompact]}>
-                                <Text style={styles.openPillText}>
-                                  {complete ? 'View' : 'Diagnose'}
-                                </Text>
-                                <MaterialIcons name="arrow-forward" size={16} color={palette.primary} />
-                              </View>
-                            </View>
+                          <Text style={styles.previewText} numberOfLines={1}>
+                            {visitDiagnosis?.diagnosis
+                              ? visitDiagnosis.diagnosis
+                              : (complete ? '✓ Diagnosis saved' : 'Tap to add diagnosis')}
+                          </Text>
+                        </View>
+
+                        {/* Right content */}
+                        <View style={styles.cardRight}>
+                          <View style={[styles.badge, complete ? styles.completedBadge : styles.pendingBadge]}>
+                            <Text style={styles.badgeText}>{complete ? 'Completed' : 'Pending'}</Text>
+                          </View>
+                          <View style={styles.actionButton}>
+                            <Text style={styles.actionButtonText}>{complete ? 'View' : 'Diagnose'}</Text>
+                            <MaterialIcons name="arrow-forward" size={14} color={palette.primary} />
                           </View>
                         </View>
                       </Pressable>
@@ -1146,12 +1100,12 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxHeight: '92%',
+    maxHeight: '88%',
     backgroundColor: palette.surface,
-    borderRadius: 28,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: palette.border,
-    padding: 18,
+    padding: 12,
     shadowColor: palette.shadow,
     shadowOffset: { width: 0, height: 14 },
     shadowOpacity: 1,
@@ -1159,41 +1113,41 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   modalCardCompact: {
-    maxHeight: '96%',
-    padding: 14,
-    borderRadius: 22,
+    maxHeight: '90%',
+    padding: 10,
+    borderRadius: 18,
   },
   modalScrollContent: {
-    paddingBottom: 4,
+    paddingBottom: 2,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    marginBottom: 10,
   },
   modalTitleWrap: {
     flex: 1,
-    paddingRight: 12,
+    paddingRight: 10,
   },
   modalTitle: {
     color: palette.text,
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   modalTitleCompact: {
-    fontSize: 20,
+    fontSize: 18,
   },
   modalSubtitle: {
     color: palette.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
   },
   modalCloseButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: palette.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1202,111 +1156,113 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 18,
+    marginBottom: 12,
+    gap: 6,
   },
   infoChip: {
-    flexBasis: '48%',
+    flexBasis: '23%',
     flexGrow: 1,
     backgroundColor: palette.surfaceMuted,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 18,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 0,
   },
   infoChipFull: {
-    flexBasis: '100%',
+    flexBasis: '48%',
+    marginBottom: 0,
   },
   infoLabel: {
     color: palette.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '600',
     textTransform: 'uppercase',
-    marginTop: 8,
-    marginBottom: 6,
+    marginTop: 4,
+    marginBottom: 3,
   },
   infoValue: {
     color: palette.text,
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
   },
   completedPanel: {
     backgroundColor: '#f9fbff',
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: 18,
+    padding: 12,
   },
   readOnlyBlock: {
-    marginBottom: 16,
+    marginBottom: 10,
   },
   readOnlyLabel: {
     color: palette.textMuted,
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 11,
+    fontWeight: '700',
     textTransform: 'uppercase',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   readOnlyValue: {
     color: palette.text,
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
   },
   completedTimestamp: {
     color: palette.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '500',
   },
   formCard: {
     backgroundColor: '#f9fbff',
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 22,
-    padding: 16,
+    borderRadius: 18,
+    padding: 12,
   },
   formIntro: {
     color: palette.textMuted,
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 14,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 10,
   },
   fieldLabel: {
     color: palette.text,
-    fontSize: 13,
-    fontWeight: '800',
-    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   input: {
     backgroundColor: palette.surface,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     color: palette.text,
-    fontSize: 15,
-    marginBottom: 14,
+    fontSize: 14,
+    marginBottom: 10,
   },
   tallInput: {
-    minHeight: 112,
+    minHeight: 80,
   },
   mediumInput: {
-    minHeight: 92,
+    minHeight: 60,
   },
   primaryButton: {
     backgroundColor: palette.primary,
-    borderRadius: 16,
-    paddingVertical: 16,
+    borderRadius: 12,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
-    marginTop: 4,
+    marginTop: 2,
   },
   primaryButtonText: {
     color: '#ffffff',
-    fontSize: 15,
-    fontWeight: '800',
-    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 6,
   },
   emptyState: {
     backgroundColor: palette.surfaceMuted,
@@ -1335,4 +1291,109 @@ const styles = StyleSheet.create({
   buttonDisabled: {
     opacity: 0.65,
   },
+  horizontalCard: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  backgroundColor: palette.surface,
+  borderWidth: 1,
+  borderColor: palette.border,
+  borderRadius: 20,
+  paddingHorizontal: 16,
+  paddingVertical: 12,
+  shadowColor: palette.shadow,
+  shadowOffset: { width: 0, height: 6 },
+  shadowOpacity: 0.8,
+  shadowRadius: 12,
+  elevation: 2,
+},
+horizontalCardCompact: {
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+},
+cardLeft: {
+  flex: 3,
+  marginRight: 12,
+},
+cardRight: {
+  alignItems: 'flex-end',
+  justifyContent: 'center',
+  gap: 8,
+},
+nameRow: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  alignItems: 'baseline',
+  marginBottom: 6,
+},
+patientName: {
+  fontSize: 16,
+  fontWeight: '800',
+  color: palette.text,
+  marginRight: 8,
+},
+patientNameCompact: {
+  fontSize: 14,
+},
+sicknessText: {
+  fontSize: 13,
+  color: palette.textMuted,
+  flexShrink: 1,
+},
+detailRow: {
+  flexDirection: 'row',
+  flexWrap: 'wrap',
+  alignItems: 'center',
+  gap: 8,
+  marginBottom: 6,
+},
+detailText: {
+  fontSize: 12,
+  fontWeight: '500',
+  color: palette.text,
+  marginRight: 4,
+},
+previewText: {
+  fontSize: 12,
+  color: palette.primaryDark,
+  opacity: 0.85,
+},
+actionButton: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: palette.primarySoft,
+  paddingHorizontal: 12,
+  paddingVertical: 6,
+  borderRadius: 40,
+  gap: 6,
+},
+actionButtonText: {
+  fontSize: 12,
+  fontWeight: '700',
+  color: palette.primary,
+},
+badge: {
+  paddingHorizontal: 10,
+  paddingVertical: 4,
+  borderRadius: 40,
+},
+badgeText: {
+  fontSize: 11,
+  fontWeight: '800',
+},
+pendingBadge: {
+  backgroundColor: palette.warningSoft,
+},
+pendingBadgeText: {
+  color: palette.warning,
+},
+completedBadge: {
+  backgroundColor: palette.successSoft,
+},
+completedBadgeText: {
+  color: palette.success,
+},
+cardPressed: {
+  opacity: 0.92,
+},
 });
