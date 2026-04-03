@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 
@@ -25,9 +26,13 @@ const palette = {
 
 export default function DoctorLogin() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const isDesktop = width >= 768;
+  const cardWidth = isDesktop ? '40%' : '100%';
 
   const onLogin = async () => {
     if (!email.trim() || !password.trim()) {
@@ -75,7 +80,7 @@ export default function DoctorLogin() {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={styles.container}>
-      <View style={styles.card}>
+      <View style={[styles.card, { width: cardWidth }]}>
         <Text style={styles.eyebrow}>Doctor Access</Text>
         <Text style={styles.title}>Sign in to the diagnosis board</Text>
         <Text style={styles.subtitle}>
@@ -124,6 +129,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 24,
     backgroundColor: palette.background,
   },

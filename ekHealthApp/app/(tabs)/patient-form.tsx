@@ -1,12 +1,20 @@
 import { Colors } from '@/constants/theme';
 import { useCurrentPatient } from '@/context/CurrentPatientContext';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { createPatientVisit } from '@/services/patientService';
+import {
+  createPatientVisit,
+  getDiagnosesByNrc,
+  getDiagnosesByPatientVisitId,
+  subscribeToDiagnosisChanges,
+  subscribeToPatientVisitChanges,
+} from '@/services/patientService';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,20 +22,26 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 
 export default function PatientFormScreen() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
   const router = useRouter();
-  const { setCurrentPatient } = useCurrentPatient();
+  const { isHydrated, nrc: storedNrc, setCurrentPatient, visitId: storedVisitId } = useCurrentPatient();
+  const { width } = useWindowDimensions();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [hasDiagnosisNotification, setHasDiagnosisNotification] = useState(false);
   const pendingSubmission = useRef<any | null>(null);
+
+  // Responsive: on large screens (Windows desktop) add 30% whitespace on both ends
+  const isLargeScreen = Platform.OS === 'web' && width >= 1024;
+  const horizontalPadding = isLargeScreen ? '30%' : 20;
 
   const [personalDetails, setPersonalDetails] = useState({
     full_name: '',
@@ -42,6 +56,72 @@ export default function PatientFormScreen() {
     sickness: '',
     intensity: 'low',
   });
+
+  const enteredNrc = personalDetails.nrc.trim();
+  const diagnosisLookup = useMemo(
+    () =>
+      enteredNrc
+        ? { nrc: enteredNrc, visitId: null as string | null }
+        : { nrc: storedNrc, visitId: storedVisitId },
+    [enteredNrc, storedNrc, storedVisitId]
+  );
+
+  const checkDiagnosisAvailability = useCallback(async () => {
+    if (!isHydrated && !diagnosisLookup.nrc && !diagnosisLookup.visitId) {
+      return;
+    }
+
+    if (!diagnosisLookup.nrc && !diagnosisLookup.visitId) {
+      setHasDiagnosisNotification(false);
+      return;
+    }
+
+    try {
+      const result = diagnosisLookup.nrc
+        ? await getDiagnosesByNrc(diagnosisLookup.nrc)
+        : diagnosisLookup.visitId
+          ? await getDiagnosesByPatientVisitId(diagnosisLookup.visitId)
+          : null;
+
+      if (!result || result.error) {
+        setHasDiagnosisNotification(false);
+        return;
+      }
+
+      setHasDiagnosisNotification(Boolean(result.data?.length));
+    } catch (error) {
+      setHasDiagnosisNotification(false);
+    }
+  }, [diagnosisLookup.nrc, diagnosisLookup.visitId, isHydrated]);
+
+  useEffect(() => {
+    void checkDiagnosisAvailability();
+  }, [checkDiagnosisAvailability]);
+
+  useEffect(() => {
+    if (!diagnosisLookup.nrc && !diagnosisLookup.visitId) {
+      return;
+    }
+
+    const refreshAvailability = () => {
+      void checkDiagnosisAvailability();
+    };
+
+    const unsubscribeDiagnosisChanges = subscribeToDiagnosisChanges(refreshAvailability, {
+      patientVisitId: diagnosisLookup.visitId,
+    });
+    const unsubscribePatientVisitChanges = subscribeToPatientVisitChanges(refreshAvailability, {
+      nrc: diagnosisLookup.nrc,
+      visitId: diagnosisLookup.visitId,
+    });
+    const intervalId = setInterval(refreshAvailability, 15000);
+
+    return () => {
+      clearInterval(intervalId);
+      unsubscribeDiagnosisChanges();
+      unsubscribePatientVisitChanges();
+    };
+  }, [checkDiagnosisAvailability, diagnosisLookup.nrc, diagnosisLookup.visitId]);
 
   const handlePersonalDetailChange = (field: string, value: string) => {
     setPersonalDetails(prev => ({ ...prev, [field]: value }));
@@ -63,6 +143,13 @@ export default function PatientFormScreen() {
     if (!diagnosisDetails.pulse.trim()) return 'Please enter pulse rate';
     if (!diagnosisDetails.temperature.trim()) return 'Please enter temperature';
     if (!diagnosisDetails.sickness.trim()) return "Please describe the patient's condition";
+
+    const pulseNum = parseInt(diagnosisDetails.pulse, 10);
+    const tempNum = parseFloat(diagnosisDetails.temperature);
+
+    if (isNaN(pulseNum) || pulseNum <= 0) return 'Pulse rate must be a valid positive number';
+    if (isNaN(tempNum) || tempNum <= 0) return 'Temperature must be a valid number';
+
     return null;
   };
 
@@ -137,66 +224,78 @@ export default function PatientFormScreen() {
     router.push('/(tabs)/see-diagnosis');
   };
 
+  const getInputBackgroundColor = () => '#ffffff';
+  const getCardBackgroundColor = () => '#ffffff';
+
   return (
     <ScrollView
-      style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.contentContainer}>
+      style={[styles.container, { backgroundColor: '#f8f9fa' }]}
+      contentContainerStyle={[
+        styles.contentContainer,
+        { paddingHorizontal: horizontalPadding, paddingBottom: 40, paddingTop: 20 },
+      ]}
+      showsVerticalScrollIndicator={false}>
+      {/* Header Section */}
       <View style={styles.headerContainer}>
         <View style={styles.headerCopy}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>Patient Registration</Text>
-          <Text style={[styles.stepIndicator, { color: colors.tabIconDefault }]}>Step {step} of 2</Text>
+          <Text style={[styles.headerTitle, { color: '#000' }]}>Patient Registration</Text>
+          <View style={styles.stepBadge}>
+            <Text style={[styles.stepIndicator, { color: colors.tint }]}>Step {step} of 2</Text>
+          </View>
         </View>
 
         <View style={styles.headerActions}>
           <TouchableOpacity
-            style={[styles.seeButton, { borderColor: colors.tabIconDefault }]}
-            onPress={handleSeeDiagnosis}>
-            <Text style={[styles.seeButtonText, { color: colors.text }]}>See Diagnosis</Text>
+              style={[styles.outlineButton, styles.notificationButton, styles.diagnosisButton]}
+              onPress={handleSeeDiagnosis}>
+              {hasDiagnosisNotification ? <View style={styles.notificationDot} /> : null}
+              <Text style={[styles.outlineButtonText, styles.diagnosisButtonText]}>See Diagnosis</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.seeButton, { borderColor: colors.tint, backgroundColor: '#ffffff' }]}
+            style={[styles.outlineButton, { borderColor: colors.tint }]}
             onPress={() => router.replace('/landing')}>
-            <Text style={[styles.seeButtonText, { color: colors.tint }]}>Go Back Home</Text>
+            <Text style={[styles.outlineButtonText, { color: colors.tint }]}>Go Back Home</Text>
           </TouchableOpacity>
         </View>
       </View>
 
+      {/* Step 1: Personal Details */}
       {step === 1 && (
-        <View style={styles.formSection}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Personal Details</Text>
+        <View style={[styles.formCard, { backgroundColor: getCardBackgroundColor(), shadowColor: '#000' }]}>
+          <Text style={[styles.sectionTitle, { color: '#000' }]}>Personal Information</Text>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Full Name</Text>
+            <Text style={[styles.label, { color: '#000' }]}>Full Name</Text>
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: '#ffffff',
-                  borderColor: colors.tabIconDefault,
-                  color: colors.text,
+                  backgroundColor: getInputBackgroundColor(),
+                  borderColor: '#ddd',
+                  color: '#000',
                 },
               ]}
               placeholder="Enter patient's full name"
-              placeholderTextColor={colors.tabIconDefault}
+              placeholderTextColor="#999"
               value={personalDetails.full_name}
               onChangeText={value => handlePersonalDetailChange('full_name', value)}
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Phone Number</Text>
+            <Text style={[styles.label, { color: '#000' }]}>Phone Number</Text>
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: '#ffffff',
-                  borderColor: colors.tabIconDefault,
-                  color: colors.text,
+                  backgroundColor: getInputBackgroundColor(),
+                  borderColor: '#ddd',
+                  color: '#000',
                 },
               ]}
               placeholder="Enter phone number"
-              placeholderTextColor={colors.tabIconDefault}
+              placeholderTextColor="#999"
               value={personalDetails.phone}
               onChangeText={value => handlePersonalDetailChange('phone', value)}
               keyboardType="phone-pad"
@@ -204,25 +303,25 @@ export default function PatientFormScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>NRC Number</Text>
+            <Text style={[styles.label, { color: '#000' }]}>NRC Number</Text>
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: '#ffffff',
-                  borderColor: colors.tabIconDefault,
-                  color: colors.text,
+                  backgroundColor: getInputBackgroundColor(),
+                  borderColor: '#ddd',
+                  color: '#000',
                 },
               ]}
               placeholder="Enter NRC number"
-              placeholderTextColor={colors.tabIconDefault}
+              placeholderTextColor="#999"
               value={personalDetails.nrc}
               onChangeText={value => handlePersonalDetailChange('nrc', value)}
             />
           </View>
 
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: colors.tint }]}
+            style={[styles.primaryButton, { backgroundColor: colors.tint }]}
             onPress={() => {
               const msg = validatePersonalDetails();
               if (msg) {
@@ -232,46 +331,47 @@ export default function PatientFormScreen() {
               }
               setStep(2);
             }}>
-            <Text style={styles.buttonText}>Next</Text>
+            <Text style={styles.primaryButtonText}>Next →</Text>
           </TouchableOpacity>
         </View>
       )}
 
+      {/* Step 2: Diagnosis Details */}
       {step === 2 && (
-        <View style={styles.formSection}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Diagnosis Details</Text>
+        <View style={[styles.formCard, { backgroundColor: getCardBackgroundColor(), shadowColor: '#000' }]}>
+          <Text style={[styles.sectionTitle, { color: '#000' }]}>Clinical Assessment</Text>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Blood Pressure</Text>
+            <Text style={[styles.label, { color: '#000' }]}>Blood Pressure</Text>
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: '#ffffff',
-                  borderColor: colors.tabIconDefault,
-                  color: colors.text,
+                  backgroundColor: getInputBackgroundColor(),
+                  borderColor: '#ddd',
+                  color: '#000',
                 },
               ]}
               placeholder="e.g., 120/80"
-              placeholderTextColor={colors.tabIconDefault}
+              placeholderTextColor="#999"
               value={diagnosisDetails.blood_pressure}
               onChangeText={value => handleDiagnosisDetailChange('blood_pressure', value)}
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Pulse Rate (bpm)</Text>
+            <Text style={[styles.label, { color: '#000' }]}>Pulse Rate (bpm)</Text>
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: '#ffffff',
-                  borderColor: colors.tabIconDefault,
-                  color: colors.text,
+                  backgroundColor: getInputBackgroundColor(),
+                  borderColor: '#ddd',
+                  color: '#000',
                 },
               ]}
               placeholder="Enter pulse rate"
-              placeholderTextColor={colors.tabIconDefault}
+              placeholderTextColor="#999"
               value={diagnosisDetails.pulse}
               onChangeText={value => handleDiagnosisDetailChange('pulse', value)}
               keyboardType="numeric"
@@ -279,18 +379,18 @@ export default function PatientFormScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Temperature (C)</Text>
+            <Text style={[styles.label, { color: '#000' }]}>Temperature (°C)</Text>
             <TextInput
               style={[
                 styles.input,
                 {
-                  backgroundColor: '#ffffff',
-                  borderColor: colors.tabIconDefault,
-                  color: colors.text,
+                  backgroundColor: getInputBackgroundColor(),
+                  borderColor: '#ddd',
+                  color: '#000',
                 },
               ]}
               placeholder="Enter temperature"
-              placeholderTextColor={colors.tabIconDefault}
+              placeholderTextColor="#999"
               value={diagnosisDetails.temperature}
               onChangeText={value => handleDiagnosisDetailChange('temperature', value)}
               keyboardType="decimal-pad"
@@ -298,27 +398,28 @@ export default function PatientFormScreen() {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Sickness/Condition</Text>
+            <Text style={[styles.label, { color: '#000' }]}>Sickness / Condition</Text>
             <TextInput
               style={[
-                styles.input,
+                styles.textArea,
                 {
-                  backgroundColor: '#ffffff',
-                  borderColor: colors.tabIconDefault,
-                  color: colors.text,
+                  backgroundColor: getInputBackgroundColor(),
+                  borderColor: '#ddd',
+                  color: '#000',
                 },
               ]}
               placeholder="Describe the patient's condition"
-              placeholderTextColor={colors.tabIconDefault}
+              placeholderTextColor="#999"
               value={diagnosisDetails.sickness}
               onChangeText={value => handleDiagnosisDetailChange('sickness', value)}
               multiline
-              numberOfLines={3}
+              numberOfLines={4}
+              textAlignVertical="top"
             />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: colors.text }]}>Intensity</Text>
+            <Text style={[styles.label, { color: '#000' }]}>Intensity Level</Text>
             <View style={styles.intensityContainer}>
               {['low', 'medium', 'high', 'critical'].map(level => (
                 <TouchableOpacity
@@ -327,7 +428,7 @@ export default function PatientFormScreen() {
                     styles.intensityButton,
                     {
                       backgroundColor:
-                        diagnosisDetails.intensity === level ? colors.tint : '#e7f5ea',
+                        diagnosisDetails.intensity === level ? colors.tint : '#f0f0f0',
                     },
                   ]}
                   onPress={() => handleDiagnosisDetailChange('intensity', level)}>
@@ -335,7 +436,8 @@ export default function PatientFormScreen() {
                     style={[
                       styles.intensityButtonText,
                       {
-                        color: diagnosisDetails.intensity === level ? '#fff' : colors.text,
+                        color: diagnosisDetails.intensity === level ? '#fff' : '#000',
+                        fontWeight: diagnosisDetails.intensity === level ? '600' : '500',
                       },
                     ]}>
                     {level.charAt(0).toUpperCase() + level.slice(1)}
@@ -345,33 +447,37 @@ export default function PatientFormScreen() {
             </View>
           </View>
 
-          <View style={styles.buttonContainer}>
+          <View style={styles.buttonRow}>
             <TouchableOpacity
-              style={[styles.button, styles.secondaryButton, { borderColor: colors.tint }]}
+              style={[styles.secondaryButton, { borderColor: colors.tint }]}
               onPress={() => setStep(1)}>
-              <Text style={[styles.buttonText, { color: colors.tint }]}>Back</Text>
+              <Text style={[styles.secondaryButtonText, { color: colors.tint }]}>← Back</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: colors.tint }]}
+              style={[styles.primaryButton, { backgroundColor: colors.tint }]}
               onPress={handleSubmit}
               disabled={loading}>
-              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Submit</Text>}
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Submit</Text>}
             </TouchableOpacity>
           </View>
         </View>
       )}
 
+      {/* Confirmation Modal */}
       <Modal
         visible={showConfirmModal}
         animationType="fade"
         transparent
         onRequestClose={() => setShowConfirmModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { backgroundColor: '#ffffff' }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Confirm Submission</Text>
-            <Text style={[styles.modalText, { color: colors.text }]}>
-              Are you sure you want to send this form? Please review your information before confirming.
+          <View style={[styles.modalContainer, { backgroundColor: getCardBackgroundColor() }]}>
+            <View style={styles.modalIconContainer}>
+              <MaterialIcons name="assignment" size={36} color={colors.tint} />
+            </View>
+            <Text style={[styles.modalTitle, { color: '#000' }]}>Confirm Submission</Text>
+            <Text style={[styles.modalText, { color: '#666' }]}>
+              Please review all information before confirming. This action cannot be undone.
             </Text>
 
             <View style={styles.modalButtons}>
@@ -379,71 +485,43 @@ export default function PatientFormScreen() {
                 <Text style={styles.modalCancelText}>Review</Text>
               </Pressable>
               <Pressable
-                style={[styles.modalButton, { backgroundColor: colors.tint }]}
+                style={[styles.modalButton, styles.modalConfirm, { backgroundColor: colors.tint }]}
                 onPress={() => {
                   setShowConfirmModal(false);
                   if (pendingSubmission.current) performSubmit(pendingSubmission.current);
                 }}>
-                <Text style={styles.modalButtonText}>Confirm</Text>
+                <Text style={styles.modalConfirmText}>Confirm</Text>
               </Pressable>
             </View>
           </View>
         </View>
       </Modal>
 
-      <Modal
-        visible={showSuccessModal}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setShowSuccessModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { backgroundColor: '#ffffff' }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Success</Text>
-            <Text style={[styles.modalText, { color: colors.text }]}>Patient visit recorded successfully.</Text>
-
-            <View style={styles.modalButtons}>
-              <Pressable
-                style={[styles.modalButton, { backgroundColor: colors.tint }]}
-                onPress={() => {
-                  setShowSuccessModal(false);
-                  setStep(1);
-                  setPersonalDetails({ full_name: '', phone: '', nrc: '' });
-                  setDiagnosisDetails({
-                    blood_pressure: '',
-                    intensity: 'low',
-                    pulse: '',
-                    sickness: '',
-                    temperature: '',
-                  });
-                }}>
-                <Text style={styles.modalButtonText}>OK</Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
+      {/* Error Modal */}
       <Modal
         visible={showErrorModal}
         animationType="fade"
         transparent
         onRequestClose={() => setShowErrorModal(false)}>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContainer, { backgroundColor: '#ffffff' }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>Error</Text>
-            <Text style={[styles.modalText, { color: colors.text }]}>{errorMessage}</Text>
+          <View style={[styles.modalContainer, { backgroundColor: getCardBackgroundColor() }]}>
+            <View style={styles.modalIconContainer}>
+             <MaterialIcons name="error" size={36} color={colors.tint} />
+            </View>
+            <Text style={[styles.modalTitle, { color: '#000' }]}>Error</Text>
+            <Text style={[styles.modalText, { color: '#666' }]}>{errorMessage}</Text>
 
             <View style={styles.modalButtons}>
               <Pressable style={[styles.modalButton, styles.modalCancel]} onPress={() => setShowErrorModal(false)}>
                 <Text style={styles.modalCancelText}>Close</Text>
               </Pressable>
               <Pressable
-                style={[styles.modalButton, { backgroundColor: colors.tint }]}
+                style={[styles.modalButton, styles.modalConfirm, { backgroundColor: colors.tint }]}
                 onPress={() => {
                   setShowErrorModal(false);
                   if (pendingSubmission.current) performSubmit(pendingSubmission.current);
                 }}>
-                <Text style={styles.modalButtonText}>Retry</Text>
+                <Text style={styles.modalConfirmText}>Retry</Text>
               </Pressable>
             </View>
           </View>
@@ -458,154 +536,222 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    padding: 20,
-    paddingBottom: 40,
+    flexGrow: 1,
   },
   headerContainer: {
-    alignItems: 'flex-start',
     flexDirection: 'row',
-    gap: 12,
     justifyContent: 'space-between',
-    marginBottom: 30,
+    alignItems: 'flex-start',
+    marginBottom: 24,
+    gap: 12,
+    flexWrap: 'wrap',
   },
   headerCopy: {
     flex: 1,
-  },
-  headerActions: {
-    alignItems: 'flex-end',
-    gap: 10,
   },
   headerTitle: {
     fontSize: 28,
     fontWeight: '700',
     marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  stepBadge: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 20,
+    alignSelf: 'flex-start',
   },
   stepIndicator: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '600',
   },
-  seeButton: {
-    backgroundColor: '#ffffff',
+  headerActions: {
+    gap: 10,
+  },
+  outlineButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 8,
     borderWidth: 1.5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    backgroundColor: 'transparent',
   },
-  seeButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
+  diagnosisButton: {
+    borderColor: '#126148',
+    backgroundColor: '#eefaf3',
   },
-  formSection: {
-    marginBottom: 20,
+  diagnosisButtonText: {
+    color: '#126148',
+  },
+  notificationButton: {
+    position: 'relative',
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: -4,
+    left: -2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#2563eb',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+  },
+  outlineButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  formCard: {
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 24,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 20,
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 24,
+    letterSpacing: -0.2,
   },
   inputGroup: {
-    marginBottom: 18,
+    marginBottom: 20,
   },
   label: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     marginBottom: 8,
   },
   input: {
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1.5,
-    fontSize: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    fontSize: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  textArea: {
+    borderRadius: 12,
+    borderWidth: 1.5,
+    fontSize: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    minHeight: 100,
   },
   intensityContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
+    gap: 10,
+    marginTop: 4,
   },
   intensityButton: {
-    alignItems: 'center',
-    borderRadius: 8,
     flex: 1,
-    marginHorizontal: 4,
-    paddingHorizontal: 16,
+    alignItems: 'center',
     paddingVertical: 10,
+    borderRadius: 30,
+    marginHorizontal: 2,
   },
   intensityButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '500',
   },
-  buttonContainer: {
+  buttonRow: {
     flexDirection: 'row',
     gap: 12,
-    justifyContent: 'space-between',
-    marginTop: 30,
+    marginTop: 16,
   },
-  button: {
-    alignItems: 'center',
-    borderRadius: 8,
+  primaryButton: {
     flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingVertical: 16,
+    borderRadius: 14,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  primaryButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
   },
   secondaryButton: {
-    backgroundColor: '#ffffff',
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    borderRadius: 14,
     borderWidth: 1.5,
+    backgroundColor: 'transparent',
   },
-  buttonText: {
-    color: '#fff',
+  secondaryButtonText: {
     fontSize: 16,
     fontWeight: '600',
   },
   modalOverlay: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.25)',
     flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center',
+    alignItems: 'center',
     padding: 20,
   },
   modalContainer: {
-    borderRadius: 12,
-    elevation: 5,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { height: 2, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 4,
+    borderRadius: 24,
+    padding: 24,
     width: '100%',
+    maxWidth: 340,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalIconContainer: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  modalIcon: {
+    fontSize: 36,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
+    textAlign: 'center',
     marginBottom: 8,
   },
   modalText: {
-    fontSize: 14,
-    marginBottom: 16,
+    fontSize: 15,
+    textAlign: 'center',
+    marginBottom: 24,
+    lineHeight: 20,
   },
   modalButtons: {
     flexDirection: 'row',
     gap: 12,
-    justifyContent: 'flex-end',
   },
   modalButton: {
+    flex: 1,
     alignItems: 'center',
-    borderRadius: 8,
     justifyContent: 'center',
-    paddingHorizontal: 16,
     paddingVertical: 12,
+    borderRadius: 12,
   },
   modalCancel: {
     backgroundColor: 'transparent',
-    borderColor: '#b9d5bf',
-    borderWidth: 1.2,
+    borderWidth: 1,
+    borderColor: '#ccc',
   },
   modalCancelText: {
-    color: '#2c5a38',
     fontWeight: '600',
+    color: '#666',
   },
-  modalButtonText: {
+  modalConfirm: {
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  modalConfirmText: {
     color: '#fff',
     fontWeight: '700',
   },

@@ -65,6 +65,11 @@ function formatDate(date?: string | null) {
   return new Date(date).toLocaleString();
 }
 
+function formatSyncTime(date?: string | null) {
+  if (!date) return 'Waiting for sync';
+  return `Updated ${new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+}
+
 function buildDiagnosisMap(diagnoses: DiagnosisRecord[]) {
   return diagnoses.reduce<Record<string, DiagnosisRecord>>((acc, item) => {
     if (item.patient_visit_id && !acc[item.patient_visit_id]) {
@@ -94,6 +99,7 @@ export default function DiagnosisScreen() {
   const [statusSaving, setStatusSaving] = useState<DoctorStatus | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
   const selectedPatientIdRef = useRef<string | null>(patientId ?? null);
 
   const pendingVisits = useMemo(
@@ -115,7 +121,7 @@ export default function DiagnosisScreen() {
   const completedCount = completedVisits.length;
   const showAvailability = (profile?.activity_status || 'online') === 'online';
   const visibleVisits = activeTab === 'pending' ? pendingVisits : completedVisits;
-  const contentMaxWidth = width >= 1280 ? 1120 : width >= 1024 ? 980 : width >= 820 ? 760 : 680;
+  const contentMaxWidth = width >= 1024 ? Math.min(width * 0.5, 760) : 760;
   const modalMaxWidth = width >= 1024 ? 760 : width >= 760 ? 660 : 520;
   const isCompactScreen = width < 480;
   const isNarrowScreen = width < 390;
@@ -220,8 +226,13 @@ export default function DiagnosisScreen() {
           preferredPatientId,
           preserveDraft,
         });
+        setLastUpdatedAt(new Date().toISOString());
       } catch (error: any) {
-        Alert.alert('Unable to load doctor workspace', error?.message || 'Please try again.');
+        if (!silent) {
+          Alert.alert('Unable to load doctor workspace', error?.message || 'Please try again.');
+        } else {
+          console.warn('Silent doctor workspace refresh failed:', error?.message || error);
+        }
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -251,6 +262,7 @@ export default function DiagnosisScreen() {
         applyWorkspaceData(visitsResult.data || [], buildDiagnosisMap(diagnosesResult.data || []), {
           preferredPatientId: patientId ?? null,
         });
+        setLastUpdatedAt(new Date().toISOString());
       } catch (error: any) {
         if ((error?.message || '').includes('No authenticated user found')) {
           router.replace('/doctor/login');
@@ -287,6 +299,20 @@ export default function DiagnosisScreen() {
     return () => {
       unsubscribeVisits();
       unsubscribeDiagnoses();
+    };
+  }, [patientId, refreshWorkspaceData]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      void refreshWorkspaceData({
+        preferredPatientId: patientId ?? selectedPatientIdRef.current,
+        preserveDraft: true,
+        silent: true,
+      });
+    }, 15000);
+
+    return () => {
+      clearInterval(intervalId);
     };
   }, [patientId, refreshWorkspaceData]);
 
@@ -416,17 +442,47 @@ export default function DiagnosisScreen() {
           showsVerticalScrollIndicator={false}>
           <View style={[styles.pageShell, { maxWidth: contentMaxWidth }]}>
             <View style={styles.heroCard}>
-              <Text style={styles.heroTitle}>Doctor Workspace</Text>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.signOutButton,
-                  pressed && styles.buttonPressed,
-                  signingOut && styles.buttonDisabled,
-                ]}
-                onPress={handleSignOut}
-                disabled={signingOut}>
-                  <MaterialIcons name= "logout" size={16} color={palette.primary} />
-              </Pressable>
+              <View style={styles.heroTopRow}>
+                <View style={styles.heroCopy}>
+                  <Text style={styles.heroTitle}>Doctor Workspace</Text>
+                  <Text style={styles.heroSubtitle}>
+                    Review new patient visits in one live queue and complete diagnoses from a focused workspace.
+                  </Text>
+                </View>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.signOutButton,
+                    pressed && styles.buttonPressed,
+                    signingOut && styles.buttonDisabled,
+                  ]}
+                  onPress={handleSignOut}
+                  disabled={signingOut}>
+                  <MaterialIcons name="logout" size={16} color={palette.primary} />
+                </Pressable>
+              </View>
+
+              <View style={styles.heroMetaRow}>
+                <View style={styles.heroMetaPill}>
+                  <MaterialIcons name="schedule" size={16} color={palette.success} />
+                  <Text style={styles.heroMetaPillText}>{formatSyncTime(lastUpdatedAt)}</Text>
+                </View>
+                <Pressable
+                    style={({ pressed }) => [
+                      styles.heroActionButton,
+                      pressed && styles.buttonPressed,
+                      refreshing && styles.buttonDisabled,
+                    ]}
+                    onPress={() =>
+                      refreshWorkspaceData({
+                        preferredPatientId: selectedPatient?.id,
+                        isRefresh: true,
+                        preserveDraft: true,
+                      })
+                    }
+                    disabled={refreshing}>
+                    <MaterialIcons name="refresh" size={18} color={palette.primary} />
+                  </Pressable>
+              </View>
             </View>
 
             <View style={styles.availabilityCard}>
@@ -475,11 +531,15 @@ export default function DiagnosisScreen() {
             </View>
 
             <View style={styles.segmentedCard}>
-              <View style={styles.sectionTitleRow}>
-                <View style={styles.sectionTitleIcon}>
-                  <MaterialIcons name="dashboard" size={18} color={palette.primary} />
+              <View style={styles.sectionTitleBar}>
+                <View style={styles.sectionTitleRow}>
+                  <View style={styles.sectionTitleIcon}>
+                    <MaterialIcons name="dashboard" size={18} color={palette.primary} />
+                  </View>
+                  <View>
+                    <Text style={styles.sectionHeading}>Diagnosis Queue</Text>
+                  </View>
                 </View>
-                <Text style={styles.sectionHeading}>Diagnosis Queue</Text>
               </View>
 
               <View style={styles.segmentedControl}>
@@ -786,18 +846,76 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 16,
     marginBottom: 16,
+  },
+  heroTopRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
+    gap: 12,
+  },
+  heroCopy: {
+    flex: 1,
+    minWidth: 220,
+    paddingRight: 4,
   },
   heroTitle: {
     color: '#ffffff',
     fontSize: 22,
     fontWeight: '800',
+    marginBottom: 6,
+  },
+  heroSubtitle: {
+    color: 'rgba(255,255,255,0.86)',
+    fontSize: 14,
+    lineHeight: 21,
+  },
+  heroActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  heroActionsCompact: {
+    width: '100%',
+  },
+  heroActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+  },
+  heroActionButtonText: {
+    color: palette.primary,
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 6,
+  },
+  heroMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginTop: 14,
+  },
+  heroMetaPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  heroMetaPillText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 8,
   },
   signOutButton: {
     backgroundColor: '#ffffff',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 999,
@@ -879,6 +997,8 @@ const styles = StyleSheet.create({
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  sectionTitleBar: {
     marginBottom: 14,
   },
   sectionTitleIcon: {
@@ -894,6 +1014,12 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 19,
     fontWeight: '800',
+  },
+  sectionSubheading: {
+    color: palette.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
   },
   segmentedControl: {
     flexDirection: 'row',

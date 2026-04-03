@@ -227,23 +227,28 @@ export const subscribeToDiagnosisChanges = (
 
 export const getDiagnosesByNrc = async (nrc: string) => {
   try {
-    // find latest patient_visit for this NRC
     console.debug('[getDiagnosesByNrc] looking up visits for nrc=', nrc);
     const { data: visits, error: visitError } = await supabase
       .from('patient_visits')
       .select('id')
       .eq('nrc', nrc)
-      .order('created_at', { ascending: false })
-      .limit(1);
+      .order('created_at', { ascending: false });
 
     console.debug('[getDiagnosesByNrc] visits result=', visits, 'error=', visitError);
     if (visitError) throw visitError;
-    const visitId = visits?.[0]?.id;
-    if (!visitId) return { data: [], error: null };
+    const visitIds = (visits || []).map(visit => visit.id).filter(Boolean);
+    if (!visitIds.length) return { data: [], error: null };
 
-    const res = await getDiagnosesByPatientVisitId(visitId);
-    console.debug('[getDiagnosesByNrc] diagnoses result for visitId=', visitId, res);
-    return res;
+    const { data, error } = await supabase
+      .from('diagnoses')
+      .select('*')
+      .in('patient_visit_id', visitIds)
+      .order('created_at', { ascending: false });
+
+    console.debug('[getDiagnosesByNrc] diagnoses result for visitIds=', visitIds, data, error);
+    if (error) throw error;
+
+    return { data, error: null };
   } catch (error) {
     console.error('Error fetching diagnoses by NRC:', error);
     return { data: null, error };
